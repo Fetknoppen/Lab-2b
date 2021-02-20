@@ -3,7 +3,6 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sys/time.h>
-
 /* You will to add includes here */
 #include <errno.h>
 #include <string.h>
@@ -12,7 +11,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-
 // Included to get the support library
 #include <calcLib.h>
 
@@ -24,6 +22,7 @@ using namespace std;
 /* Needs to be global, to be rechable by callback and main */
 int loopCount = 0;
 int terminate = 0;
+int id = 1;
 
 /* Call back function, will be called when the SIGALRM is raised when the timer expires. */
 void checkJobbList(int signum)
@@ -39,6 +38,123 @@ void checkJobbList(int signum)
   }
 
   return;
+}
+in_port_t get_in_port(struct sockaddr *sa)
+{
+    if (sa->sa_family == AF_INET)
+        return (((struct sockaddr_in*)sa)->sin_port);
+
+    return (((struct sockaddr_in6*)sa)->sin6_port);
+}
+int getArith()
+{
+
+  char *randArith = randomType();
+  int ret = -1;
+  if (randArith == "add")
+    ret = 1;
+  else if (randArith == "sub")
+    ret = 2;
+  else if (randArith == "mul")
+    ret = 3;
+  else if (randArith == "div")
+    ret = 4;
+  else if (randArith == "fadd")
+    ret = 5;
+  else if (randArith == "fsub")
+    ret = 6;
+  else if (randArith == "fmul")
+    ret = 7;
+  else if (randArith == "fdiv")
+    ret = 8;
+
+  return ret;
+}
+
+struct clientInfo
+{
+  int id;
+  int arith;
+  int inValue1, inValue2, inResult;
+  float flValue1, flValue2, flResult;
+  char clientAddress[250];//ip:port
+  struct clientInfo *next;
+};
+void addClient(clientInfo *client, calcProtocol &clcProt, addrinfo &p)
+{
+  clientInfo *current = client;
+  while (current->next != NULL)
+  {
+    current = current->next;
+  }
+
+  //Get client ip and port and put in cliendAddress char array/////////////////////////////////////////////
+  
+  current->next->id = clcProt.id;
+  current->next->arith = clcProt.arith;
+  current->next->inValue1 = clcProt.inValue1;
+  current->next->inValue2 = clcProt.inValue2;
+  current->next->flValue1 = clcProt.flValue1;
+  current->next->flValue2 = clcProt.flValue2;
+
+  //Calculate andsave the result
+  switch (current->next->arith)
+  {
+  case 1:
+    current->next->inResult = current->next->inValue1 + current->next->inValue2;
+    break;
+  case 2:
+    current->next->inResult = current->next->inValue1 - current->next->inValue2;
+    break;
+  case 3:
+    current->next->inResult = current->next->inValue1 * current->next->inValue2;
+    break;
+  case 4:
+    current->next->inResult = current->next->inValue1 / current->next->inValue2;
+    break;
+  case 5:
+    current->next->flResult = current->next->flValue1 + current->next->flValue2;
+    break;
+  case 6:
+    current->next->flResult = current->next->flValue1 - current->next->flValue2;
+    break;
+  case 7:
+    current->next->flResult = current->next->flValue1 * current->next->flValue2;
+    break;
+  case 8:
+    current->next->flResult = current->next->flValue1 / current->next->flValue2;
+    break;
+
+  default:
+    break;
+  }
+
+  current->next->next = NULL;
+}
+void checkJob(clientInfo *client, char *Iaddress, calcProtocol *clcProt, calcMessage &clcMsg)
+{
+  clientInfo *current = client;
+  bool searching = true;
+  bool found = false;
+
+  while (searching)
+  {
+    if (current->id == clcProt->id)
+    {
+      searching = false;
+      found = true;
+    }
+    else if(current->next == NULL){
+      searching = false;
+    }
+    else{
+      current = current->next;
+    }
+  }
+  if(found){
+    //Ceck if it is the right client
+    
+  }
 }
 
 int main(int argc, char *argv[])
@@ -58,6 +174,7 @@ int main(int argc, char *argv[])
     printf("Invalid input.\n");
     exit(1);
   }
+  initCalcLib();
 
   int rv = 0;
   int yes = 1;
@@ -67,14 +184,20 @@ int main(int argc, char *argv[])
   int sockfd;
   struct addrinfo hints, *servinfo, *p;
   struct sockaddr_in clientAddr;
+  
 
   struct hostent *hostp[MAXCLIENTS]; //client host info
 
   calcProtocol clcProt;
   calcMessage clcMsg;
+  calcMessage *calcMsgP = (calcMessage *)malloc(sizeof(calcMessage));
+
+  calcProtocol *calcProtP = (calcProtocol *)malloc(sizeof(calcProtocol));
+
+  void *structP = malloc(sizeof(calcProtocol));
 
   memset(&hints, 0, sizeof(hints));
-  hints.ai_family = AF_INET;
+  hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_DGRAM;
   hints.ai_flags = AI_PASSIVE;
 
@@ -131,24 +254,66 @@ int main(int argc, char *argv[])
   while (terminate == 0)
   {
     memset(&clcMsg, 0, sizeof(clcMsg));
-    memset(&clientAddr, 0, sizeof(clientAddr));
+    //////////////////////////////////////////////////////////////////////////memset(&clientAddr, 0, sizeof(clientAddr));
 
-    bytesRcv = recvfrom(sockfd, &clcMsg, sizeof(clcMsg), NULL, p->ai_addr, &p->ai_addrlen);
+    bytesRcv = recvfrom(sockfd, &structP, sizeof(structP), NULL, p->ai_addr, &p->ai_addrlen);
     if (bytesRcv < 0)
     {
       printf("Could not recive.\n");
       exit(1);
     }
-    if (clcMsg.type == 22 &&
-        clcMsg.message == 0 &&
-        clcMsg.protocol == 17 &&
-        clcMsg.major_version == 1 &&
-        clcMsg.minor_version == 0)
+    //Recived a calcMessage
+    if (bytesRcv == sizeof(calcMessage))
     {
-      //OK
+      //If the calcMessage is correct send back a calcProtocol
+      calcMsgP = (calcMessage *)structP;
+      // type = 22, message = 0, protocol = 17, major_version = 1, minor_version = 0).
+      if (calcMsgP->type == 22 &&
+          calcMsgP->message == 0 &&
+          calcMsgP->protocol == 17 &&
+          calcMsgP->major_version == 1 &&
+          calcMsgP->minor_version == 0)
+      {
+        //Correct calcMessage
+        memset(&clcProt, 0, sizeof(clcProt));
+        clcProt.arith = getArith();
+        clcProt.id = id++;
+        if (clcProt.arith < 0)
+        {
+          printf("Could not get random arith.\n");
+          continue;
+        }
+        else if (clcProt.arith < 5)
+        {
+          //int
+          clcProt.inValue1 = randomInt();
+          clcProt.inValue2 = randomInt();
+        }
+        else if (clcProt.arith >= 5)
+        {
+          //float
+          clcProt.flValue1 = randomFloat();
+          clcProt.flValue2 = randomFloat();
+        }
+        bytesSent = sendto(sockfd, &clcProt, sizeof(clcProt), 0, p->ai_addr, p->ai_addrlen);
+        if (bytesSent < 0)
+        {
+          printf("Recive error.\n");
+          continue;
+        }
+      }
+      else
+      {
+        //set calcMsgP //type=2, msg=2, maj_v=1, min_v=0
+        //Send back calcMsgP
+      }
+      //store this client somehow??
     }
-    else{
-      //wrong
+    //Recived a calcProtocol
+    else if (bytesRcv == sizeof(calcProtocol))
+    {
+      calcProtP = (calcProtocol *)structP;
+      //check if the awnser is correct
     }
 
     printf("This is the main loop, %d time.\n", loopCount);
@@ -156,6 +321,5 @@ int main(int argc, char *argv[])
     loopCount++;
   }
 
-  printf("done.\n");
   return (0);
 }
