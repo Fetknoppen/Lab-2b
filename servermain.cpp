@@ -14,6 +14,8 @@
 #include <string>
 #include <string.h>
 #include <iostream>
+#include <chrono>
+#include <ctime> 
 
 // Included to get the support library
 #include <calcLib.h>
@@ -35,6 +37,7 @@ struct clientInfo
   int inValue1, inValue2, inResult;
   float flValue1, flValue2, flResult;
   char clientAddress[250]; //ip:port
+  time_t start;
   struct clientInfo *next;
 };
 clientInfo currentClient;
@@ -44,13 +47,26 @@ void checkJobbList(int signum)
 {
   // As anybody can call the handler, its good coding to check the signal number that called it.
 
-  printf("Let me be, I want to sleep.\n");
+  time_t end = time(0);
+  clientInfo *current = &currentClient;
+  clientInfo ref = currentClient;
+  int nrOfRemoved = 0;
 
-  if(loopCount > 20) {
-    printf("I had enough.\n");
-    run = false;
+  while (current->next != NULL)
+  {
+    if(end - current->start >= 10){
+      printf("Removed client: %d.\n", current->id);
+      memset(current, 0, sizeof(current));
+      current = nullptr;
+      nrOfRemoved++;
+    }
+    current = current->next;
   }
-  
+  currentClient = ref;
+  if(nrOfRemoved == 0){
+    printf("No removed clients.\n");
+  }
+
   return;
 }
 in_port_t get_in_port(struct sockaddr *sa)
@@ -96,9 +112,11 @@ void addClient(clientInfo *client, calcProtocol &clcProt, struct sockaddr_in &cl
 
   currentClient = *current;
 
+  
   current->next = (clientInfo *)malloc(sizeof(clientInfo));
   sprintf(current->next->clientAddress, "%s:%d", inet_ntoa(clientAddress.sin_addr), htons(clientAddress.sin_port));
 
+  current->start = time(0);
   current->next->id = clcProt.id;
   current->next->arith = clcProt.arith;
   current->next->inValue1 = clcProt.inValue1;
@@ -137,6 +155,7 @@ void addClient(clientInfo *client, calcProtocol &clcProt, struct sockaddr_in &cl
   default:
     break;
   }
+  //Convert to network byte order
   if (ntohl(current->next->arith) < 5)
   {
     current->next->inResult = htonl(current->next->inResult);
@@ -204,8 +223,11 @@ void checkJob(clientInfo *client, char *Iaddress, calcProtocol *clcProt, calcMes
         }
       }
     }
-    //Wrong client
-    //clcMsg.message = htonl(2);
+    else
+    {
+      //Wrong client
+      clcMsg.message = htonl(2);
+    }
   }
 }
 
@@ -256,7 +278,7 @@ int main(int argc, char *argv[])
   hints.ai_socktype = SOCK_DGRAM;
   hints.ai_flags = AI_PASSIVE;
 
-  rv = getaddrinfo(NULL, Destport, &hints, &servinfo);
+  rv = getaddrinfo(Desthost, Destport, &hints, &servinfo);
   if (rv != 0)
   {
     fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
@@ -305,14 +327,13 @@ int main(int argc, char *argv[])
   /* Regiter a callback function, associated with the SIGALRM signal, which will be raised when the alarm goes of */
   signal(SIGALRM, checkJobbList);
   setitimer(ITIMER_REAL, &alarmTime, NULL); // Start/register the alarm.
-  
 
   socklen_t clientLen = sizeof(clientAddr);
 
   while (run)
   {
     memset(&clcMsg, 0, sizeof(clcMsg));
-    //////////////////////////////////////////////////////////////////////////memset(&clientAddr, 0, sizeof(clientAddr));
+    memset(&clientAddr, 0, sizeof(clientAddr));
 
     bytesRcv = recvfrom(sockfd, (void *)structP, MAXLINE, 0, (struct sockaddr *)&clientAddr, &clientLen);
     if (bytesRcv < 0)
