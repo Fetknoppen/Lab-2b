@@ -280,13 +280,14 @@ void checkJob(char *Iaddress, calcProtocol *clcProt, calcMessage &clcMsg)
         //First client
         firstClient = current->next;
         delete current;
+        nrOfClients--;
       }
-      //Check if the client is last or in the middle///////////////////////////////////////////////////////////////////////////////
     }
     else{
       //Only one client
       delete current;
       firstClient = nullptr;
+      nrOfClients--;
     }
   }
   else
@@ -465,10 +466,10 @@ int main(int argc, char *argv[])
       {
         printf("Wrong protocol.\n");
         //set calcMsgP //type=2, msg=2, maj_v=1, min_v=0
-        calcMsgP->type = 2;
-        calcMsgP->message = 2;
-        calcMsgP->major_version = 1;
-        calcMsgP->minor_version = 0;
+        calcMsgP->type = ntohs(2);
+        calcMsgP->message = ntohl(2);
+        calcMsgP->major_version = ntohs(1);
+        calcMsgP->minor_version = ntohs(0);
 
         //Send back calcMsgP
         sendto(sockfd, calcMsgP, sizeof(calcMsgP), 0, (struct sockaddr *)&clientAddr, clientLen);
@@ -491,6 +492,13 @@ int main(int argc, char *argv[])
       {
         //Send back a calcMessage type=2, message=2, major_version=1,minor_version=0 /////////////////////////////////////////////////////////////////////////////////
         printf("Dont even try.\n");
+        calcMsgP->type = ntohs(2);
+        calcMsgP->message = ntohl(2);
+        calcMsgP->major_version = ntohs(1);
+        calcMsgP->minor_version = ntohs(0);
+        printf("Sending 2 2 1 0");
+        //Send back calcMsgP
+        sendto(sockfd, calcMsgP, sizeof(calcMsgP), 0, (struct sockaddr *)&clientAddr, clientLen);
       }
     }
   }
