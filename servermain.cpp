@@ -92,7 +92,7 @@ void checkJobbList(int signum)
       prev = current;
       current = current->next;
     }
-    printf("loop count: %d.\n", loopCount);
+    //printf("loop count: %d.\n", loopCount);
   }
   else
   {
@@ -173,15 +173,7 @@ void addClient(calcProtocol &clcProt, struct sockaddr_in &clientAddress)
     current->inResult = ntohl(current->inValue1) + ntohl(current->inValue2);
     break;
   case 2:
-    if (ntohl(current->inValue1) >= ntohl(current->inValue2))
-    {
-      current->inResult = ntohl(current->inValue1) - ntohl(current->inValue2);
-    }
-    else
-    {
-      current->inResult = ntohl(current->inValue2) - ntohl(current->inValue1);
-    }
-
+    current->inResult = ntohl(current->inValue1) - ntohl(current->inValue2);
     break;
   case 3:
     current->inResult = ntohl(current->inValue1) * ntohl(current->inValue2);
@@ -417,15 +409,33 @@ int main(int argc, char *argv[])
         else if (ntohl(clcProt.arith) < 5)
         {
           //int
+          int temp;
           clcProt.inValue1 = htonl(randomInt());
           clcProt.inValue2 = htonl(randomInt());
+          if (clcProt.inValue1 < clcProt.inValue2)
+          {
+            //printf("Switching int values.\nBefore 1: %d\n2: %d.\n", ntohl(clcProt.inValue1), ntohl(clcProt.inValue2));
+            temp = clcProt.inValue1;
+            clcProt.inValue1 = clcProt.inValue2;
+            clcProt.inValue2 = temp;
+            //printf("Switching int values.\nAfter 1: %d\n2: %d.\n", ntohl(clcProt.inValue1), ntohl(clcProt.inValue2));
+          }
           //printf("Gave int values: %d and %d.\n", ntohl(clcProt.inValue1), ntohl(clcProt.inValue2));
         }
         else if (ntohl(clcProt.arith) >= 5)
         {
           //float
+          float temp;
           clcProt.flValue1 = randomFloat();
           clcProt.flValue2 = randomFloat();
+          if (clcProt.flValue1 < clcProt.flValue2)
+          {
+            //printf("Switch the float values.\nValues before 1: %f\n2: %f\n", clcProt.flValue1, clcProt.flValue2 );
+            temp = clcProt.flValue1;
+            clcProt.flValue1 = clcProt.flValue2;
+            clcProt.flValue2 = temp;
+            //printf("Switch the float values.\nValues after 1: %f\n2: %f\n", clcProt.flValue1, clcProt.flValue2 );
+          }
           //printf("Gave float values: %f and %f.\n", clcProt.flValue1, clcProt.flValue2);
         }
         clcProt.id = htonl(id++);
@@ -459,7 +469,8 @@ int main(int argc, char *argv[])
         checkJob(ipPort, calcProtP, clcMsg);
         sendto(sockfd, (calcMessage *)&clcMsg, sizeof(clcMsg), 0, (struct sockaddr *)&clientAddr, clientLen);
       }
-      else{
+      else
+      {
         printf("Dont even try.\n");
       }
     }
