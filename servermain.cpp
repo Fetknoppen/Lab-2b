@@ -51,7 +51,6 @@ void checkJobbList(int signum)
   time_t end = time(0);
   clientInfo *current = firstClient;
   clientInfo *prev = firstClient;
-  int nrOfRemoved = 0;
   int loopCount = 0;
   if (nrOfClients > 0)
   {
@@ -222,7 +221,7 @@ void checkJob(char *Iaddress, calcProtocol *clcProt, calcMessage &clcMsg)
 
   while (searching)
   {
-    if (current->id == clcProt->id)
+    if (current->id == (int)clcProt->id)
     {
       searching = false;
       found = true;
@@ -308,7 +307,7 @@ int main(int argc, char *argv[])
   int rv = 0;
   int yes = 1;
   int bytesRcv = 0;
-  int bytesSent = 0;
+  //int bytesSent = 0;
 
   char ipPort[250];
 
@@ -430,7 +429,7 @@ int main(int argc, char *argv[])
           //printf("Gave float values: %f and %f.\n", clcProt.flValue1, clcProt.flValue2);
         }
         clcProt.id = htonl(id++);
-        bytesSent = sendto(sockfd, &clcProt, sizeof(clcProt), 0, (struct sockaddr *)&clientAddr, clientLen);
+        sendto(sockfd, &clcProt, sizeof(clcProt), 0, (struct sockaddr *)&clientAddr, clientLen);
         //Save client
         addClient(clcProt, clientAddr);
       }
@@ -444,7 +443,7 @@ int main(int argc, char *argv[])
         calcMsgP->minor_version = 0;
 
         //Send back calcMsgP
-        bytesSent = sendto(sockfd, calcMsgP, sizeof(calcMsgP), 0, (struct sockaddr *)&clientAddr, clientLen);
+        sendto(sockfd, calcMsgP, sizeof(calcMsgP), 0, (struct sockaddr *)&clientAddr, clientLen);
       }
     }
     //Recived a calcProtocol
@@ -458,7 +457,7 @@ int main(int argc, char *argv[])
         //check if the awnser is correct
         sprintf(ipPort, "%s:%d", inet_ntoa(clientAddr.sin_addr), htons(clientAddr.sin_port));
         checkJob(ipPort, calcProtP, clcMsg);
-        bytesSent = sendto(sockfd, (calcMessage *)&clcMsg, sizeof(clcMsg), 0, (struct sockaddr *)&clientAddr, clientLen);
+        sendto(sockfd, (calcMessage *)&clcMsg, sizeof(clcMsg), 0, (struct sockaddr *)&clientAddr, clientLen);
       }
       else{
         printf("Dont even try.\n");
