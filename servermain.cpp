@@ -229,6 +229,7 @@ void checkJob(char *Iaddress, calcProtocol *clcProt, calcMessage &clcMsg)
   }
   if (found)
   {
+    bool ok = false;
     //Ceck if it is the right client
     if (strcmp(current->clientAddress, Iaddress) == 0)
     {
@@ -240,6 +241,7 @@ void checkJob(char *Iaddress, calcProtocol *clcProt, calcMessage &clcMsg)
           //Correct
           clcMsg.message = htonl(1);
           printf("OK.\n");
+          ok = true;
         }
         else
         {
@@ -256,6 +258,7 @@ void checkJob(char *Iaddress, calcProtocol *clcProt, calcMessage &clcMsg)
           //correct
           printf("OK.\n");
           clcMsg.message = htonl(1);
+          ok = true;
         }
         else
         {
@@ -269,6 +272,21 @@ void checkJob(char *Iaddress, calcProtocol *clcProt, calcMessage &clcMsg)
     {
       //Wrong client
       clcMsg.message = htonl(2);
+    }
+    if (nrOfClients > 1)
+    {
+      if (current == firstClient)
+      {
+        //First client
+        firstClient = current->next;
+        delete current;
+      }
+      //Check if the client is last or in the middle///////////////////////////////////////////////////////////////////////////////
+    }
+    else{
+      //Only one client
+      delete current;
+      firstClient = nullptr;
     }
   }
   else
@@ -471,6 +489,7 @@ int main(int argc, char *argv[])
       }
       else
       {
+        //Send back a calcMessage type=2, message=2, major_version=1,minor_version=0 /////////////////////////////////////////////////////////////////////////////////
         printf("Dont even try.\n");
       }
     }
