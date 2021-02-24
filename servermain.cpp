@@ -15,7 +15,7 @@
 #include <string.h>
 #include <iostream>
 #include <chrono>
-#include <ctime> 
+#include <ctime>
 
 // Included to get the support library
 #include <calcLib.h>
@@ -27,9 +27,10 @@
 
 using namespace std;
 /* Needs to be global, to be rechable by callback and main */
-int loopCount = 0;
+//int loopCount = 0;
 bool run = true;
 int id = 1;
+int nrOfClients = 0;
 struct clientInfo
 {
   int id;
@@ -40,7 +41,7 @@ struct clientInfo
   time_t start;
   struct clientInfo *next;
 };
-clientInfo currentClient;
+clientInfo *firstClient = nullptr; //Gör pekare
 
 /* Call back function, will be called when the SIGALRM is raised when the timer expires. */
 void checkJobbList(int signum)
@@ -48,23 +49,55 @@ void checkJobbList(int signum)
   // As anybody can call the handler, its good coding to check the signal number that called it.
 
   time_t end = time(0);
-  clientInfo *current = &currentClient;
-  clientInfo ref = currentClient;
+  clientInfo *current = firstClient;
+  clientInfo *prev = firstClient;
   int nrOfRemoved = 0;
-
-  while (current->next != NULL)
+  int loopCount = 0;
+  if (nrOfClients > 0)
   {
-    if(end - current->start >= 10){
-      printf("Removed client: %d.\n", current->id);
-      memset(current, 0, sizeof(current));
-      current = nullptr;
-      nrOfRemoved++;
+    printf("Number of clients: %d\n", nrOfClients);
+    while (current != nullptr)
+    {
+      loopCount++;
+      if ((end - current->start) >= 10)
+      {
+        printf("we need to remove the client with ID: %d\n", ntohl(current->id));
+        if (current == firstClient)
+        {
+          //Fisrt client
+
+          if (nrOfClients > 1)
+          {
+            firstClient = current->next;
+          }
+          //We only have one client
+          else
+          {
+            firstClient = nullptr;
+          }
+          delete current;
+        }
+        else if (current->next == nullptr)
+        {
+          //Last client
+          delete current;
+        }
+        else
+        {
+          //A client in the middle
+          prev->next = current->next;
+          delete current;
+        }
+        nrOfClients--;
+      }
+      prev = current;
+      current = current->next;
     }
-    current = current->next;
+    printf("loop count: %d.\n", loopCount);
   }
-  currentClient = ref;
-  if(nrOfRemoved == 0){
-    printf("No removed clients.\n");
+  else
+  {
+    printf("No clients.\n");
   }
 
   return;
@@ -102,70 +135,88 @@ int getArith()
   }
 }
 
-void addClient(clientInfo *client, calcProtocol &clcProt, struct sockaddr_in &clientAddress)
+void addClient(calcProtocol &clcProt, struct sockaddr_in &clientAddress)
 {
-  clientInfo *current = client;
-  while (current->next != NULL)
+  clientInfo *current = firstClient;
+
+  if (current == nullptr)
   {
+    printf("First cilet.\n");
+    current = new clientInfo;
+    firstClient = current;
+  }
+  else
+  {
+    while (current->next != nullptr)
+    {
+      current = current->next;
+    }
+    current->next = new clientInfo;
     current = current->next;
+    printf("Another boring client.\n");
   }
 
-  currentClient = *current;
-
-  
-  current->next = (clientInfo *)malloc(sizeof(clientInfo));
-  sprintf(current->next->clientAddress, "%s:%d", inet_ntoa(clientAddress.sin_addr), htons(clientAddress.sin_port));
-
+  //current->next = (clientInfo *)malloc(sizeof(clientInfo));
+  sprintf(current->clientAddress, "%s:%d", inet_ntoa(clientAddress.sin_addr), htons(clientAddress.sin_port));
+  nrOfClients++;
   current->start = time(0);
-  current->next->id = clcProt.id;
-  current->next->arith = clcProt.arith;
-  current->next->inValue1 = clcProt.inValue1;
-  current->next->inValue2 = clcProt.inValue2;
-  current->next->flValue1 = clcProt.flValue1;
-  current->next->flValue2 = clcProt.flValue2;
+  current->id = clcProt.id;
+  current->arith = clcProt.arith;
+  current->inValue1 = clcProt.inValue1;
+  current->inValue2 = clcProt.inValue2;
+  current->flValue1 = clcProt.flValue1;
+  current->flValue2 = clcProt.flValue2;
 
   //Calculate andsave the result
-  switch (ntohl(current->next->arith))
+  switch (ntohl(current->arith))
   {
   case 1:
-    current->next->inResult = ntohl(current->next->inValue1) + ntohl(current->next->inValue2);
+    current->inResult = ntohl(current->inValue1) + ntohl(current->inValue2);
     break;
   case 2:
-    current->next->inResult = ntohl(current->next->inValue1) - ntohl(current->next->inValue2);
+    if (ntohl(current->inValue1) >= ntohl(current->inValue2))
+    {
+      current->inResult = ntohl(current->inValue1) - ntohl(current->inValue2);
+    }
+    else
+    {
+      current->inResult = ntohl(current->inValue2) - ntohl(current->inValue1);
+    }
+
     break;
   case 3:
-    current->next->inResult = ntohl(current->next->inValue1) * ntohl(current->next->inValue2);
+    current->inResult = ntohl(current->inValue1) * ntohl(current->inValue2);
     break;
   case 4:
-    current->next->inResult = ntohl(current->next->inValue1) / ntohl(current->next->inValue2);
+    current->inResult = ntohl(current->inValue1) / ntohl(current->inValue2);
     break;
   case 5:
-    current->next->flResult = current->next->flValue1 + current->next->flValue2;
+    current->flResult = current->flValue1 + current->flValue2;
     break;
   case 6:
-    current->next->flResult = current->next->flValue1 - current->next->flValue2;
+    current->flResult = current->flValue1 - current->flValue2;
     break;
   case 7:
-    current->next->flResult = current->next->flValue1 * current->next->flValue2;
+    current->flResult = current->flValue1 * current->flValue2;
     break;
   case 8:
-    current->next->flResult = current->next->flValue1 / current->next->flValue2;
+    current->flResult = current->flValue1 / current->flValue2;
     break;
 
   default:
     break;
   }
   //Convert to network byte order
-  if (ntohl(current->next->arith) < 5)
+  if (ntohl(current->arith) < 5)
   {
-    current->next->inResult = htonl(current->next->inResult);
+    current->inResult = htonl(current->inResult);
   }
 
-  current->next->next = NULL;
+  current->next = nullptr;
 }
-void checkJob(clientInfo *client, char *Iaddress, calcProtocol *clcProt, calcMessage &clcMsg)
+void checkJob(char *Iaddress, calcProtocol *clcProt, calcMessage &clcMsg)
 {
-  clientInfo *current = client;
+  clientInfo *current = firstClient;
   bool searching = true;
   bool found = false;
 
@@ -192,7 +243,7 @@ void checkJob(clientInfo *client, char *Iaddress, calcProtocol *clcProt, calcMes
     {
       if (ntohl(current->arith) < 5)
       {
-        printf("int result.\nServer awnser: %d.\nClient awnser: %d.\n", ntohl(current->inResult), ntohl(clcProt->inResult));
+        //printf("int result.\nServer awnser: %d.\nClient awnser: %d.\n", ntohl(current->inResult), ntohl(clcProt->inResult));
         if (ntohl(current->inResult) == ntohl(clcProt->inResult))
         {
           //Correct
@@ -208,7 +259,7 @@ void checkJob(clientInfo *client, char *Iaddress, calcProtocol *clcProt, calcMes
       }
       else
       {
-        printf("float result.\nServer awnser: %f.\nClient awnser: %f.\n", current->flResult, clcProt->flResult);
+        //printf("float result.\nServer awnser: %f.\nClient awnser: %f.\n", current->flResult, clcProt->flResult);
         if (abs(current->flResult - clcProt->flResult) < 0.0001)
         {
           //correct
@@ -228,6 +279,10 @@ void checkJob(clientInfo *client, char *Iaddress, calcProtocol *clcProt, calcMes
       //Wrong client
       clcMsg.message = htonl(2);
     }
+  }
+  else
+  {
+    printf("Did not find this client.\n");
   }
 }
 
@@ -268,10 +323,6 @@ int main(int argc, char *argv[])
   calcProtocol *calcProtP = (calcProtocol *)malloc(sizeof(calcProtocol));
 
   void *structP = malloc(sizeof(calcProtocol));
-
-  clientInfo client;
-  client.id = 0;
-  client.next = NULL;
 
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_UNSPEC;
@@ -344,7 +395,7 @@ int main(int argc, char *argv[])
     //Recived a calcMessage
     if (bytesRcv == sizeof(calcMessage))
     {
-      printf("Recived calcMessage.\n");
+      //printf("Recived calcMessage.\n");
       //If the calcMessage is correct send back a calcProtocol
       calcMsgP = (calcMessage *)structP;
       // type = 22, message = 0, protocol = 17, major_version = 1, minor_version = 0).
@@ -357,7 +408,7 @@ int main(int argc, char *argv[])
         //Correct calcMessage
         memset(&clcProt, 0, sizeof(clcProt));
         clcProt.arith = htonl(getArith());
-        printf("Arit nr: %d.\n", ntohl(clcProt.arith));
+        //printf("Arit nr: %d.\n", ntohl(clcProt.arith));
         //clcProt.id = id++;
         if (ntohl(clcProt.arith) < 0)
         {
@@ -369,19 +420,19 @@ int main(int argc, char *argv[])
           //int
           clcProt.inValue1 = htonl(randomInt());
           clcProt.inValue2 = htonl(randomInt());
-          printf("Gave int values: %d and %d.\n", ntohl(clcProt.inValue1), ntohl(clcProt.inValue2));
+          //printf("Gave int values: %d and %d.\n", ntohl(clcProt.inValue1), ntohl(clcProt.inValue2));
         }
         else if (ntohl(clcProt.arith) >= 5)
         {
           //float
           clcProt.flValue1 = randomFloat();
           clcProt.flValue2 = randomFloat();
-          printf("Gave float values: %f and %f.\n", clcProt.flValue1, clcProt.flValue2);
+          //printf("Gave float values: %f and %f.\n", clcProt.flValue1, clcProt.flValue2);
         }
         clcProt.id = htonl(id++);
         bytesSent = sendto(sockfd, &clcProt, sizeof(clcProt), 0, (struct sockaddr *)&clientAddr, clientLen);
         //Save client
-        addClient(&client, clcProt, clientAddr);
+        addClient(clcProt, clientAddr);
       }
       else
       {
@@ -399,19 +450,20 @@ int main(int argc, char *argv[])
     //Recived a calcProtocol
     else if (bytesRcv == sizeof(calcProtocol))
     {
-      printf("Recived calcProtocol.\n");
-      calcProtP = (calcProtocol *)structP;
+      if (nrOfClients > 0)
+      {
+        //printf("Recived calcProtocol.\n");
+        calcProtP = (calcProtocol *)structP;
 
-      //check if the awnser is correct
-      sprintf(ipPort, "%s:%d", inet_ntoa(clientAddr.sin_addr), htons(clientAddr.sin_port));
-      checkJob(&client, ipPort, calcProtP, clcMsg);
-      bytesSent = sendto(sockfd, (calcMessage *)&clcMsg, sizeof(clcMsg), 0, (struct sockaddr *)&clientAddr, clientLen);
+        //check if the awnser is correct
+        sprintf(ipPort, "%s:%d", inet_ntoa(clientAddr.sin_addr), htons(clientAddr.sin_port));
+        checkJob(ipPort, calcProtP, clcMsg);
+        bytesSent = sendto(sockfd, (calcMessage *)&clcMsg, sizeof(clcMsg), 0, (struct sockaddr *)&clientAddr, clientLen);
+      }
+      else{
+        printf("Dont even try.\n");
+      }
     }
-
-    printf("This is the main loop, %d time.\n", loopCount);
-    sleep(1);
-    loopCount++;
   }
-
   return (0);
 }
